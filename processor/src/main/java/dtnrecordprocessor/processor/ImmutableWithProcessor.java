@@ -101,8 +101,6 @@ public class ImmutableWithProcessor extends AbstractProcessor {
             JavaFile.builder(package_name, interface_builder.build())
                 .build();
         output_java.writeTo(processingEnv.getFiler());
-        processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE, 
-                        "Generating file to : " + package_name);
     }
 
     private static String joinedNewRecordArgsWithNewVal(
