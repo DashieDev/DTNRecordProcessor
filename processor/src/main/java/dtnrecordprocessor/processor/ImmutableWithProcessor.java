@@ -54,11 +54,11 @@ public class ImmutableWithProcessor extends AbstractProcessor {
     private void generateWithInterface(TypeElement target_record) throws IOException {
         final var package_name = this.processingEnv.getElementUtils().getPackageOf(target_record)
             .getQualifiedName().toString();
-        final var record_name = target_record.getSimpleName().toString();
-        final var record_name_full = ClassName.get(package_name, record_name);
+        final var record_name_full = ClassName.get(target_record);
+
         final var interface_posfix = "ImmutableWith";
-        
-        final var interface_name = record_name + interface_posfix;
+        final var interface_name = interfaceNameFromRecord(
+            package_name, target_record, interface_posfix);
         var interface_builder = TypeSpec.interfaceBuilder(interface_name)
             .addModifiers(Modifier.PUBLIC);
 
@@ -106,6 +106,16 @@ public class ImmutableWithProcessor extends AbstractProcessor {
             JavaFile.builder(package_name, interface_builder.build())
                 .build();
         output_java.writeTo(processingEnv.getFiler());
+    }
+
+    private static String interfaceNameFromRecord(String package_name, 
+        TypeElement target_record, String posfix) {
+        var qualified_name = target_record.getQualifiedName().toString();
+        var record_name = !package_name.isEmpty() ? 
+            qualified_name.substring(package_name.length() + 1) 
+            : qualified_name;
+        record_name = record_name.replace('.', '_') + posfix;
+        return record_name;
     }
 
     private static String joinedNewRecordArgsWithNewVal(

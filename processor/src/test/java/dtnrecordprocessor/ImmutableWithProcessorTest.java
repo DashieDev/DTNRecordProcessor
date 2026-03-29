@@ -17,36 +17,36 @@ class ImmutableWithProcessorTest {
     @Test
     void generatesWithInterfaceForRecord() {
         JavaFileObject inputState = JavaFileObjects.forSourceLines(
-            "doggytalents.state.DogState",
+            "doggytalents.state.OuterClass",
             "package doggytalents.state;",
-            "",
             "import dtnrecordprocessor.lib.ImmutableWith;",
-            "",
-            "@ImmutableWith",
-            "public record DogState(int health, String mode) implements DogStateImmutableWith {}"
+            "public class OuterClass {",
+            "    @ImmutableWith",
+            "    public record DogState(int health, String mode) implements OuterClass_DogStateImmutableWith {}",
+            "}"
         );
 
         JavaFileObject expectedOutput = JavaFileObjects.forSourceLines(
-            "doggytalents.state.DogStateImmutableWith",
+            "doggytalents.state.OuterClass_DogStateImmutableWith",
             "package doggytalents.state;",
             "import java.lang.String;",
-            "public interface DogStateImmutableWith {",
+            "public interface OuterClass_DogStateImmutableWith {",
             "  int health();",
             "",
-            "  default DogState withHealth(int newVal) {",
+            "  default OuterClass.DogState withHealth(int newVal) {",
             "    if (this.health() == newVal) {",
-            "      return (DogState) this;",
+            "      return (OuterClass.DogState) this;",
             "    }",
-            "    return new DogState(newVal, this.mode());",
+            "    return new OuterClass.DogState(newVal, this.mode());",
             "  }",
             "",
             "  String mode();",
             "",
-            "  default DogState withMode(String newVal) {",
-            "    if (this.mode() == newVal) {",
-            "      return (DogState) this;",
+            "  default OuterClass.DogState withMode(String newVal) {",
+            "    if (java.util.Objects.equals(this.mode(), newVal)) {",
+            "      return (OuterClass.DogState) this;",
             "    }",
-            "    return new DogState(this.health(), newVal);",
+            "    return new OuterClass.DogState(this.health(), newVal);",
             "  }",
             "}"
         );
@@ -57,7 +57,7 @@ class ImmutableWithProcessorTest {
 
         assertThat(compilation).succeeded();
         assertThat(compilation)
-            .generatedSourceFile("doggytalents.state.DogStateImmutableWith")
+            .generatedSourceFile("doggytalents.state.OuterClass_DogStateImmutableWith")
             .hasSourceEquivalentTo(expectedOutput);
     }
 }
