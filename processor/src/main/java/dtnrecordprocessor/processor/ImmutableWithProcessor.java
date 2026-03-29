@@ -25,6 +25,8 @@ import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
 
+import dtnrecordprocessor.lib.ImmutableWith;
+
 @SupportedAnnotationTypes("dtnrecordprocessor.lib.ImmutableWith")
 @SupportedSourceVersion(SourceVersion.RELEASE_17)
 @AutoService(Processor.class)
@@ -134,6 +136,12 @@ public class ImmutableWithProcessor extends AbstractProcessor {
 
     private static String interfaceNameFromRecord(String package_name, 
         TypeElement target_record, String posfix) {
+        
+        var annotation = target_record.getAnnotation(ImmutableWith.class);
+        var override_name = annotation != null ? annotation.className() : "";
+        if (!override_name.isEmpty())
+            return override_name;
+
         var qualified_name = target_record.getQualifiedName().toString();
         var record_name = !package_name.isEmpty() ? 
             qualified_name.substring(package_name.length() + 1) 
