@@ -2,10 +2,6 @@ plugins {
     id 'dtn-java-conventions'
 }
 
-repositories {
-    mavenCentral()
-}
-
 dependencies {
     implementation 'com.squareup:javapoet:1.13.0'
     
