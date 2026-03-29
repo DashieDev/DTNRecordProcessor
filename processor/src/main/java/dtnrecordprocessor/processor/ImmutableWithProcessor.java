@@ -81,8 +81,13 @@ public class ImmutableWithProcessor extends AbstractProcessor {
                 .returns(record_name_full)
                 .addParameter(field_type, new_val_name);
 
+            boolean is_string_compare = field_type.equals(ClassName.get(String.class));;
             wither_spec
-                .beginControlFlow("if (this.$L() == $L)", field_name, new_val_name)
+                .beginControlFlow(
+                    is_string_compare ? 
+                        "if (java.util.Objects.equals(this.$L(), $L))" 
+                        : "if (this.$L() == $L)", 
+                    field_name, new_val_name)
                 .addStatement("return ($T) this", record_name_full)
                 .endControlFlow();
             
