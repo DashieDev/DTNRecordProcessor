@@ -62,6 +62,30 @@ public class ImmutableWithProcessor extends AbstractProcessor {
         var interface_builder = TypeSpec.interfaceBuilder(interface_name)
             .addModifiers(Modifier.PUBLIC);
 
+        final var interface_name_full = package_name.isEmpty() ? 
+            interface_name : package_name + "." + interface_name;
+        final boolean do_implement = target_record.getInterfaces()
+            .stream()
+            .anyMatch(x -> {
+                var name = x.toString();
+                return name.equals(interface_name) || name.equals(interface_name_full);
+            });
+        
+        if (!do_implement) {
+            final var error_msg = String.format(
+                "Record %s annotated with @ImmutableWith should implement the generated interface: %s", 
+                target_record.getSimpleName(), interface_name);
+            
+            processingEnv.getMessager().printMessage(
+                Diagnostic.Kind.ERROR, error_msg, target_record);
+
+            var output_java = 
+                JavaFile.builder(package_name, interface_builder.build())
+                    .build();
+            output_java.writeTo(processingEnv.getFiler());
+            return;
+        }
+
         final var record_fields = target_record.getRecordComponents();
         
         for (final var record_field : record_fields) {
