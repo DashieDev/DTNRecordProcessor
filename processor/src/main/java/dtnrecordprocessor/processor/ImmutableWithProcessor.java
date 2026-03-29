@@ -107,7 +107,7 @@ public class ImmutableWithProcessor extends AbstractProcessor {
                 .returns(record_name_full)
                 .addParameter(field_type, new_val_name);
 
-            boolean is_string_compare = field_type.equals(ClassName.get(String.class));;
+            boolean is_string_compare = field_type.equals(ClassName.get(String.class));
             wither_spec
                 .beginControlFlow(
                     is_string_compare ? 
