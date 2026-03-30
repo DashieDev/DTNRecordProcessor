@@ -64,13 +64,14 @@ public class ImmutableWithProcessor extends AbstractProcessor {
         var interface_builder = TypeSpec.interfaceBuilder(interface_name)
             .addModifiers(Modifier.PUBLIC);
 
-        final var interface_name_full = package_name.isEmpty() ? 
+        final var interface_name_full = ClassName.get(package_name, interface_name);
+        final var interface_name_qualified = package_name.isEmpty() ? 
             interface_name : package_name + "." + interface_name;
         final boolean do_implement = target_record.getInterfaces()
             .stream()
             .anyMatch(x -> {
                 var name = x.toString();
-                return name.equals(interface_name) || name.equals(interface_name_full);
+                return name.equals(interface_name) || name.equals(interface_name_qualified);
             });
         
         if (!do_implement) {
@@ -88,6 +89,13 @@ public class ImmutableWithProcessor extends AbstractProcessor {
             return;
         }
 
+        final var produce_method_name = "produce";
+        final var produce_spec = MethodSpec.methodBuilder(produce_method_name)
+            .addModifiers(Modifier.PUBLIC, Modifier.DEFAULT)
+            .returns(record_name_full)
+            .addStatement("return ($T) this", record_name_full);
+        interface_builder.addMethod(produce_spec.build());
+
         final var record_fields = target_record.getRecordComponents();
         
         for (final var record_field : record_fields) {
@@ -99,34 +107,71 @@ public class ImmutableWithProcessor extends AbstractProcessor {
                 .returns(field_type);
 
             
-            final var wither_prefix = "with";
-            final var wither_name = wither_prefix + toUpperCamelCase(field_name);
+            final var wither_name = witherNameFromField(field_name);
             final var new_val_name = "newVal";
             final var wither_spec = MethodSpec.methodBuilder(wither_name)
                 .addModifiers(Modifier.PUBLIC, Modifier.DEFAULT)
-                .returns(record_name_full)
+                .returns(interface_name_full)
                 .addParameter(field_type, new_val_name);
 
-            boolean is_string_compare = field_type.equals(ClassName.get(String.class));
-            wither_spec
-                .beginControlFlow(
-                    is_string_compare ? 
-                        "if (java.util.Objects.equals(this.$L(), $L))" 
-                        : "if (this.$L() == $L)", 
-                    field_name, new_val_name)
-                .addStatement("return ($T) this", record_name_full)
-                .endControlFlow();
+            addInvertedEqualityCheckStatements(wither_spec, 
+                field_type, field_name, new_val_name);
             
-            var joined_args = joinedNewRecordArgsWithNewVal(
-                record_fields, record_field, new_val_name);
             wither_spec
-                .addStatement("return new $T($L)", record_name_full, joined_args);
+                .addStatement("return new _Draft(this).$L($L)", wither_name, new_val_name);
 
 
             interface_builder.addMethod(getter_spec.build());
             interface_builder.addMethod(wither_spec.build());
         }
 
+        var draft_builder = TypeSpec.classBuilder("_Draft")
+            .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+            .addSuperinterface(interface_name_full);
+
+        final var draft_constructor_spec = MethodSpec.constructorBuilder()
+            .addModifiers(Modifier.PRIVATE)
+            .addParameter(interface_name_full, "source");
+
+        for (final var record_field : record_fields) {
+            final var field_name = record_field.getSimpleName().toString();
+            final var field_type = TypeName.get(record_field.asType());
+            final var wither_name = witherNameFromField(field_name);
+            final var new_val_name = "newVal";
+
+            draft_builder.addField(field_type, field_name, Modifier.PRIVATE);
+
+            draft_constructor_spec
+                .addStatement("this.$L = source.$L()", field_name, field_name);
+
+            final var getter_spec = MethodSpec.methodBuilder(field_name)
+                .addAnnotation(Override.class)
+                .addModifiers(Modifier.PUBLIC)
+                .returns(field_type)
+                .addStatement("return this.$L", field_name);
+            draft_builder.addMethod(getter_spec.build());
+
+            final var wither_spec = MethodSpec.methodBuilder(wither_name)
+                .addAnnotation(Override.class)
+                .addModifiers(Modifier.PUBLIC)
+                .returns(interface_name_full)
+                .addParameter(field_type, new_val_name)
+                .addStatement("this.$L = $L", field_name, new_val_name)
+                .addStatement("return this");
+            draft_builder.addMethod(wither_spec.build());
+        }
+
+        draft_builder.addMethod(draft_constructor_spec.build());
+
+        final var draft_produce_spec = MethodSpec.methodBuilder(produce_method_name)
+            .addAnnotation(Override.class)
+            .addModifiers(Modifier.PUBLIC)
+            .returns(record_name_full);
+        draft_produce_spec.addStatement("return new $T($L)", 
+            record_name_full, joinedNewRecordArgsForDraft(record_fields));
+        draft_builder.addMethod(draft_produce_spec.build());
+
+        interface_builder.addType(draft_builder.build());
 
         var output_java = 
             JavaFile.builder(package_name, interface_builder.build())
@@ -150,6 +195,26 @@ public class ImmutableWithProcessor extends AbstractProcessor {
         return record_name;
     }
 
+    private static String witherNameFromField(String fieldName) {
+        final var wither_prefix = "with";
+        return wither_prefix + toUpperCamelCase(fieldName);
+    }
+
+    private static void addInvertedEqualityCheckStatements(
+        MethodSpec.Builder builder,
+        TypeName fieldType, String fieldName, String newValName
+    ) {
+        boolean is_string_compare = fieldType.equals(ClassName.get(String.class));
+        builder
+            .beginControlFlow(
+                is_string_compare ? 
+                    "if (java.util.Objects.equals(this.$L(), $L))" 
+                    : "if (this.$L() == $L)", 
+                fieldName, newValName)
+            .addStatement("return this")
+            .endControlFlow();
+    }
+
     private static String joinedNewRecordArgsWithNewVal(
         List<? extends Element> fields, Element targetField, String newValName) {
         
@@ -157,6 +222,14 @@ public class ImmutableWithProcessor extends AbstractProcessor {
             .map(x -> x == targetField ? 
                 newValName 
                 : "this." + x.getSimpleName() + "()")
+            .collect(Collectors.joining(", "));
+    }
+
+    private static String joinedNewRecordArgsForDraft(
+        List<? extends Element> fields) {
+        
+        return fields.stream()
+            .map(x -> "this." + x.getSimpleName())
             .collect(Collectors.joining(", "));
     }
 
